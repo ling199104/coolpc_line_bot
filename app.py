@@ -94,6 +94,11 @@ def handle_image_message(event):
 
     s3_client.upload_file(file_path, "iii-tutorial-v2", "student15/" + file_path)
 
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage('照片已上傳')
+    )
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=environ['PORT'])
