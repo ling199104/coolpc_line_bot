@@ -1,0 +1,9 @@
+ngrok
+ngrok.exe
+data_parser.ipynb
+.ipynb_checkpoints
+.idea
+__pycache__
+s3_demo.py
+coolpc.txt
+coolpc_data.txt

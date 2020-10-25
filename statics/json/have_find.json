@@ -1,0 +1,22 @@
+{
+  "type": "template",
+  "altText": "this is a confirm template",
+  "template": {
+    "type": "confirm",
+    "actions": [
+      {
+        "type": "postback",
+        "label": "是",
+        "text": "!是",
+        "data": "&find=1"
+      },
+      {
+        "type": "postback",
+        "label": "否",
+        "text": "!否",
+        "data": "&find=0"
+      }
+    ],
+    "text": "請問有明確想找的商品嗎？"
+  }
+}
