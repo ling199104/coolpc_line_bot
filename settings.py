@@ -1,7 +1,4 @@
 from os import environ
-from spacy import load
-import en_core_web_sm
-nlp= en_core_web_sm.load()
 
 
 AWS_ACCESS_KEY_ID = environ['AWS_ACCESS_KEY_ID']
