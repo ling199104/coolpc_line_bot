@@ -1,8 +1,7 @@
 from os import environ
-import sputnik
-import spacy.about
-
-package = sputnik.install('spacy', spacy.about.__version__, spacy.about.__default_model__)
+from spacy import load
+import en_core_web_sm
+nlp= en_core_web_sm.load()
 
 
 AWS_ACCESS_KEY_ID = environ['AWS_ACCESS_KEY_ID']
