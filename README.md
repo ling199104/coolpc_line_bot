@@ -1,11 +1,11 @@
-程式裡面有很多環境變數
+環境變數
 
 # AWS
 ```
 AWS_ACCESS_KEY_ID: string
 AWS_SECRET_ACCESS_KEY: string
 ```
-用來跟AWS做溝通用的，我們用來把照片上傳到s3
+用來跟AWS溝通，把照片上傳到s3
 
 # Line
 ```
@@ -18,4 +18,4 @@ CHANNEL_SECRET: string
 ```
 PORT
 ```
-Heroku會隨機取port給我們使用
+Heroku會隨機提供環境變數port給bot使用
