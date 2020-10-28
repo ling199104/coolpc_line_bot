@@ -2,6 +2,7 @@
 # import codecs
 import requests
 import re
+from os.path import dirname
 from bs4 import BeautifulSoup
 
 
@@ -128,11 +129,29 @@ class CoolPcCrawler:
         return data
 
     @classmethod
-    def get_feebee_image(cls, search_keyword: str):
+    def get_all_data(cls, soup) -> list:
+        data_list = []
+        text_list = soup.select("tbody#tbdy > tr > td > td")
+        for i, content in enumerate(text_list):
+            if i == 0:
+                pass
+            elif i == 1:
+                item_list = [re.sub(r'(\u3000)|(\u25c6)|(\u2605)|\n', '', option.text) for option in content('option')
+                             if (re.sub(r'\d+', '', option.text) != '' and re.findall(r'\$', option.text) != [])]
+                data_list += item_list[1:]
+            else:
+                item_list = [re.sub(r'(\u3000)|(\u25c6)|(\u2605)|\n', '', option.text) for option in
+                             content('option')[1:] if (re.sub(r'\d+', '', option.text) != '' and
+                                                       re.findall(r'\$', option.text) != [])]
+                data_list += item_list[1:]
+        return data_list
+
+    @classmethod
+    def get_feebee_result(cls, search_keyword: str) -> tuple:
         response = requests.get(
             url="https://feebee.com.tw/s/".format(search_keyword),
             params={
-                "q": "旋剛 勁風者 VG5-W (紅)"
+                "q": search_keyword
             },
             headers={
                 "Host": "feebee.com.tw",
@@ -149,12 +168,25 @@ class CoolPcCrawler:
         )
         response.encoding = 'utf8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        pre_analyze = soup.select_one("li > span > a > img")
-        return re.sub(r'.+=/|\?\d+', '', pre_analyze['data-src'])
+        try:
+            pre_analyze_image_1 = soup.select_one("li > span > a > img")
+            pre_analyze_image_2 = soup.select_one("li.pure-g > span > a > img")
+            pre_analyze_name = soup.select_one("li.pure-g > span > a > h3")
+            pre_analyze_price_1 = soup.select_one("li.pure-g > span > div > a > span")
+            pre_analyze_price_2 = soup.select_one("li.pure-g > span > ul > li > span")
+            image_url = re.sub(r'.+=/|\?\d+', '', (pre_analyze_image_1 or pre_analyze_image_2)['data-src'])
+            img_data = requests.get(image_url).content
+            image_file_name = ''.join(re.findall(u"[a-zA-Z0-9]+", pre_analyze_name.text))
+            with open(dirname(__file__) + '/../statics/images/{}.jpg'.format(image_file_name), 'wb+') as handler:
+                handler.write(img_data)
+            return pre_analyze_name.text, (pre_analyze_price_1 or pre_analyze_price_2).text, image_url
+        except AttributeError as e:
+            print(e)
+            return ()
 
 
 if __name__ == "__main__":  # debug-only
     first_soup = CoolPcCrawler.get_response()
     cool_pc_data = CoolPcCrawler.get_data(first_soup)
     for dataset in cool_pc_data:
-        print(dataset[4])
+        print(repr(dataset[0]))

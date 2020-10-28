@@ -15,7 +15,7 @@ verify_ssl = true
 "aiohttp" = "*"
 "chatterbot" = "*"
 "spacy" = "*"
-pyyaml = "*"
+"pyyaml" = "*"
 
 [requires]
 python_version = "3.7"

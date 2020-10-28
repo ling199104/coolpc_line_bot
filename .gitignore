@@ -3,7 +3,10 @@ ngrok.exe
 data_parser.ipynb
 .ipynb_checkpoints
 .idea
+backup
+statics/images
+statics/user_data
 __pycache__
 s3_demo.py
 coolpc.txt
-coolpc_data.txt
+db.sqlite3

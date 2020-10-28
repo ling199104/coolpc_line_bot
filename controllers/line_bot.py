@@ -1,5 +1,7 @@
 import re
 import json
+import math
+import random
 from models.s3_storage import s3_client
 from flask import Flask, request, abort, send_file
 from models.parser import CoolPcCrawler
@@ -9,7 +11,7 @@ from linebot import (
 )
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, FollowEvent, ImageMessage, QuickReply, QuickReplyButton, MessageAction,
-    TemplateSendMessage, ImageCarouselTemplate, ImageCarouselColumn, PostbackAction
+    TemplateSendMessage, ImageCarouselTemplate, ImageCarouselColumn, PostbackAction, ImageSendMessage
 )
 
 from linebot.exceptions import (
@@ -25,7 +27,7 @@ handler = WebhookHandler(CHANNEL_SECRET)
 first_soup = CoolPcCrawler.get_response()
 cool_pc_data = CoolPcCrawler.get_data(first_soup)
 # assign chatterbot
-chat_bot = ChatBot('Cool_PC')
+chat_bot = ChatBot('Cool_PC_Raw')
 
 
 app = Flask(__name__)
@@ -35,6 +37,9 @@ app = Flask(__name__)
 def get_image():
     if request.args.get('name') == 'panda.jpg':
         filename = '../statics/images/panda.jpg'
+        return send_file(filename, mimetype='image/gif')
+    elif request.args.get('name'):
+        filename = '../statics/images/{}'.format(request.args.get('name'))
         return send_file(filename, mimetype='image/gif')
     else:
         abort(404, description="Resource not found")
@@ -64,7 +69,7 @@ def handle_text_message(event):
     global cool_pc_data
     # read text from user
     text = event.message.text
-    if text == "!我想重來":
+    if text == "!我想重來" or text == "!使用教學":
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text='好的，沒問題！\n請問您有明確想找的商品嗎？', quick_reply=QuickReply(items=[
@@ -180,55 +185,196 @@ def handle_text_message(event):
         )
         line_bot_api.reply_message(event.reply_token, image_carousel_template_message)
 
-    elif re.match("!限時下殺", text):
+    elif re.match(r"!限時下殺", text):  # 限時下殺
         soup = CoolPcCrawler.get_response()
         cool_pc_data = CoolPcCrawler.get_data(soup)
         limited_sale = []
         for dataset in cool_pc_data:
             limited_sale += dataset[3]
-        print(limited_sale)
-        line_bot_api.reply_message(event.reply_token, [
-            TextSendMessage(text=limited_sale[0]),
-            TextSendMessage(text=limited_sale[1]),
-            TextSendMessage(text=limited_sale[2]),
-            TextSendMessage(text=limited_sale[3]),
-            TextSendMessage(text=limited_sale[4])
-        ])
-    elif re.match("!熱門商品", text):
+        if re.match(r"!限時下殺$", text):
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="第{}頁".format(i + 1), text="!限時下殺{}".format(i + 1)))
+                    for i in range(0, math.ceil(len(limited_sale) / 5))
+                ]))
+            )
+        elif re.match(r"!限時下殺\d+$", text):
+            index = int(re.sub("!限時下殺", "", text))
+            try:
+                line_bot_api.reply_message(event.reply_token, [
+                    TextSendMessage(limited_sale[i - 1]) for i in range(((index - 1) * 5), index * 5)
+                ])
+            except IndexError:
+                last_index = (index - 1) * 5
+                try:
+                    line_bot_api.reply_message(event.reply_token,
+                                               [TextSendMessage(limited_sale[i - 1])
+                                                for i in range(last_index, last_index + len(limited_sale) % 5)])
+                except IndexError:
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像哪裡怪怪的哦，請重新查詢看看"))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像哪裡怪怪的哦，請重新查詢看看"))
+    elif re.match(r"!熱賣商品", text):  # 熱賣商品
         soup = CoolPcCrawler.get_response()
         cool_pc_data = CoolPcCrawler.get_data(soup)
-        hot_sale = []
-        for dataset in cool_pc_data:
-            hot_sale += dataset[4]
-        print(hot_sale)
-        line_bot_api.reply_message(event.reply_token, [
-            TextSendMessage(text=hot_sale[0]),
-            TextSendMessage(text=hot_sale[1]),
-            TextSendMessage(text=hot_sale[2]),
-            TextSendMessage(text=hot_sale[3]),
-            TextSendMessage(text=hot_sale[4])
-        ])
-    elif re.match("!價格異動", text):
+        if re.match(r"!熱賣商品$", text) or not re.match(r"!熱賣商品:\s", text):
+            if text == "!熱賣商品!第一頁" or text == "!熱賣商品":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!熱賣商品: {}".format(dataset[0]))) for dataset in cool_pc_data[0:11]] +
+                        [QuickReplyButton(action=MessageAction(label="看其他的分類", text="!熱賣商品!第二頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))])))
+            elif text == "!熱賣商品!第二頁":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!熱賣商品: {}".format(dataset[0]))) for dataset in cool_pc_data[11:21]] +
+                        [QuickReplyButton(action=MessageAction(label="上一頁", text="!熱賣商品!第一頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="下一頁", text="!熱賣商品!第三頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))]))
+                )
+            elif text == "!熱賣商品!第三頁":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!熱賣商品: {}".format(dataset[0]))) for dataset in cool_pc_data[21:]] +
+                        [QuickReplyButton(action=MessageAction(label="上一頁", text="!熱賣商品!第二頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))]))
+                )
+            else:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text='阿鬼說中文'))
+        elif re.match(r"!熱賣商品:\s", text):
+            sample_items = []
+            try:
+                for dataset in cool_pc_data:
+                    if re.sub(r"\s", "", dataset[0]) == re.sub(r"!熱賣商品:|\s", "", text):
+                        sample_items = random.sample(dataset[4], k=5)
+                        break
+                if sample_items:
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        [TextSendMessage(text=item) for item in sample_items[:-1]] +
+                        [TextSendMessage(text=sample_items[-1], quick_reply=QuickReply(
+                            items=[QuickReplyButton(action=MessageAction(label="顯示更多", text=text))]))])
+                else:
+                    # print('no data matched')
+                    raise IndexError
+            except IndexError:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像怪怪的哦，請重新查詢看看"))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像怪怪的哦，請重新查詢看看"))
+    elif re.match(r"!價格異動", text):  # 價格異動
         soup = CoolPcCrawler.get_response()
         cool_pc_data = CoolPcCrawler.get_data(soup)
-        price_changed = []
-        for dataset in cool_pc_data:
-            price_changed += dataset[5]
-        print(price_changed)
-        line_bot_api.reply_message(event.reply_token, [
-            TextSendMessage(text=price_changed[0]),
-            TextSendMessage(text=price_changed[1]),
-            TextSendMessage(text=price_changed[2]),
-            TextSendMessage(text=price_changed[3]),
-            TextSendMessage(text=price_changed[4])
-        ])
-    elif not re.match("!", text):
+        if re.match(r"!價格異動$", text) or not re.match(r"!價格異動:\s", text):
+            if text == '!價格異動!第一頁' or text == "!價格異動":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!價格異動: {}".format(dataset[0]))) for dataset in cool_pc_data[0:11]] +
+                        [QuickReplyButton(action=MessageAction(label="看其他的分類", text="!價格異動!第二頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))])))
+            elif text == "!價格異動!第二頁":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!價格異動: {}".format(dataset[0]))) for dataset in cool_pc_data[11:21]] +
+                        [QuickReplyButton(action=MessageAction(label="上一頁", text="!價格異動!第一頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="下一頁", text="!價格異動!第三頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))]))
+                )
+            elif text == "!價格異動!第三頁":
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text='愛你所擇，擇你所愛。', quick_reply=QuickReply(
+                        items=[QuickReplyButton(action=MessageAction(
+                            label=dataset[0],
+                            text="!價格異動: {}".format(dataset[0]))) for dataset in cool_pc_data[21:]] +
+                        [QuickReplyButton(action=MessageAction(label="上一頁", text="!價格異動!第二頁"))] +
+                        [QuickReplyButton(action=MessageAction(label="重來", text="!我想重來"))]))
+                )
+            else:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text='阿鬼說中文'))
+        elif re.match(r"!價格異動:\s", text):
+            sample_items = []
+            try:
+                for dataset in cool_pc_data:
+                    if re.sub(r"\s", "", dataset[0]) == re.sub(r"!價格異動:|\s", "", text):
+                        sample_items = random.sample(dataset[5], k=5)
+                        break
+                if sample_items:
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        [TextSendMessage(text=item) for item in sample_items[:-1]] +
+                        [TextSendMessage(text=sample_items[-1], quick_reply=QuickReply(
+                            items=[QuickReplyButton(action=MessageAction(label="顯示更多", text=text))]))])
+                else:
+                    raise IndexError
+            except IndexError:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像怪怪的哦，請重新查詢看看"))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="好像怪怪的哦，請重新查詢看看"))
+
+    elif re.match(r"^\?", text) or re.match(r"^\uff1f", text):
+        soup = CoolPcCrawler.get_response()
+        _all_data = CoolPcCrawler.get_all_data(soup)
+        _keyword_list = re.sub(r"[?？]", "", text).split(' ')
+        _keyword_list.reverse()
+
+        # do something for searching
+        def keyword_mapping(keyword_list, all_data):
+            if not keyword_list:
+                return all_data
+            else:
+                pop = keyword_list.pop()
+                all_data = [data for data in all_data if pop in data]
+                return keyword_mapping(keyword_list, all_data)
+        result_list = keyword_mapping(_keyword_list, _all_data)
+
+        if result_list:
+            if len(result_list) >= 5:
+                line_bot_api.reply_message(event.reply_token, [TextSendMessage(text=result) for result
+                                                               in random.sample(result_list, k=5)])
+            else:
+                line_bot_api.reply_message(event.reply_token, [TextSendMessage(text=result) for result
+                                                               in random.sample(result_list, k=len(result_list))])
+        else:
+            try:
+                data_tuple = CoolPcCrawler.get_feebee_result(re.sub(r"[?？]", "", text))
+                image_name = ''.join(re.findall(u"[a-zA-Z0-9]+", data_tuple[0]))
+                image_url = "https://dfba704bd8c0.ap.ngrok.io/images?name={}.jpg".format(image_name)
+                messages = '{} ${}'.format(data_tuple[0], data_tuple[1])
+                # image_url = "https://dfba704bd8c0.ap.ngrok.io/images?name=panda.jpg"
+                if data_tuple:
+                    line_bot_api.reply_message(event.reply_token, [
+                        TextSendMessage(text="找不到商品哦\n以下是網路上的查詢結果。"),
+                        ImageSendMessage(original_content_url=image_url, preview_image_url=image_url),
+                        TextSendMessage(text=messages)
+                    ])
+                else:
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage(text="找不到商品哦"))
+            except Exception as e:
+                print(e)
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text="找不到商品哦"))
+
+    elif not re.match("!", text) and not re.match(r"^\?", text) and not re.match(r"^\uff1f", text):
         response = chat_bot.get_response(text)
         response_data = response.serialize()
-        print(response_data)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_data['text']))
     else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="阿鬼說中文"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="功能尚未開放哦！\n支付1+1份大薯以解鎖進階功能"))
 
     # Read json when get text message from user
     # with open('reply.json', encoding='utf8') as rf:
@@ -270,23 +416,7 @@ def handle_image_message(event):
 
 
 if __name__ == "__main__":
-    # from chatterbot.trainers import ChatterBotCorpusTrainer, ListTrainer
-    # train with corpus
-    # trainer_corpus = ChatterBotCorpusTrainer(chat_bot)
-    # trainer_corpus.train(
-    #     "chatterbot.corpus.english",
-    #     "chatterbot.corpus.traditionalchinese",
-    #     "chatterbot.corpus.japanese"
-    # )
-    # train with chinese character and first 10 word
-    # trainer_list = ListTrainer(chat_bot)
-    # for cool_pc_dataset in cool_pc_data:
-    #     for item in cool_pc_dataset[-1]:
-    #         mix_words = ' '.join(re.findall(re.compile(u"[\u4e00-\u9fa5a-zA-Z0-9]+"), item))
-    #         trainer_list.train([mix_words, item])
-    #         trainer_list.train([item[0:15], item])
-    #         chinese_words = ' '.join(re.findall(re.compile(u"[\u4e00-\u9fa5]+"), item))
-    #         trainer_list.train([chinese_words, item])
-    #         english_words = ' '.join(re.findall(re.compile(u"[a-zA-Z0-9]+"), item))
-    #         trainer_list.train([english_words, item])
+    # _soup = CoolPcCrawler.get_response()
+    # cool_pc_data = CoolPcCrawler.get_data(_soup)
+    # print(cool_pc_data[5][0])
     pass
